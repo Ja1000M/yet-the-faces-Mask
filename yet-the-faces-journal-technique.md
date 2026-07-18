@@ -1,5 +1,5 @@
 # Yet The Faces — Journal technique complet
-**État au 19 juin 2026**
+**État au 18 juillet 2026**
 
 ## Contexte du projet
 
@@ -31,23 +31,20 @@ Masque en fil de cuivre pour Milena Trivier (prosopagnosique), basé sur les 478
 
 ## Phase B — Migration Raspberry Pi (en cours)
 
-### Matériel Pi 5 reçu
-- Raspberry Pi 5 8GB acheté d'occasion (171€, avec ventilateur Active Cooler + alim 27W officiels inclus)
-- Camera Module 3 Wide Noir (autofocus, 12MP, grand angle 120°)
-- Carte SanDisk Extreme Pro 64GB (achetée par sécurité après une carte 1TB suspecte de contrefaçon, marque HUNYEIZ, écartée)
+### Matériel
+- Raspberry Pi 5 8GB (occasion, 171€, ventilateur Active Cooler + alim 27W officiels)
+- Camera Module 3 Wide Noir (autofocus, 12MP, grand angle 120°) + câble CSI FPC 22Pin→15Pin — reçus et branchés
+- 2× écrans Waveshare 4" 480×800 HDMI — fonctionnels
+- Carte SanDisk Extreme Pro 64GB
 - Batterie Anker 20000mAh
-- 2× câbles micro HDMI vers HDMI (marque Thsucords, 30cm)
-
-### Matériel en attente
-- Câble CSI FPC 22Pin→15Pin (Pi 5 vers Camera Module 3) — livraison prévue 19/06, **bloquant actuel**
-- Écrans (2×, format 4 pouces 800×480 HDMI) — Waveshare écarté car délai Amazon trop long (livraison annoncée 2 août, après le tournage) ; alternative Kubii (34€, réf WV12030, compatibilité Pi 5 confirmée en fiche technique) envisagée mais pas commandée, pas de marque fabricant claire
+- 2× câbles micro HDMI vers HDMI (Thsucords, 30cm)
 - Aimants néodyme (lot commandé sur Amazon)
-- Oreillette Bluetooth — **hors périmètre**, c'est le projet de Jorge/Anna (reconnaissance faciale + retour audio à Milena), pas celui de Jamil
+- Oreillette Bluetooth — **hors périmètre**, projet de Jorge/Anna (reconnaissance faciale + retour audio à Milena)
 
 ### Configuration système — point critique
-- **Première tentative ratée** : Raspberry Pi OS par défaut = Trixie (Debian 13, Python 3.13) → MediaPipe totalement incompatible, aucune wheel ARM64 disponible pour Python 3.13, même en compilant Python 3.11 depuis les sources en parallèle (essayé, fonctionnel mais MediaPipe restait cassé : `ModuleNotFoundError: No module named 'mediapipe.python._framework_bindings'`)
-- **Solution** : reflasher la carte microSD avec **Raspberry Pi OS (Legacy, 64-bit)** = Debian 12 Bookworm, qui inclut nativement Python 3.11
-- Hostname : `yetthefaces.local`, user : `jamil`, SSH activé, WiFi configuré via Raspberry Pi Imager
+- **Première tentative ratée** : Raspberry Pi OS par défaut = Trixie (Debian 13, Python 3.13) → MediaPipe totalement incompatible, aucune wheel ARM64 pour Python 3.13 (`ModuleNotFoundError: No module named 'mediapipe.python._framework_bindings'`)
+- **Solution** : reflasher avec **Raspberry Pi OS (Legacy, 64-bit)** = Debian 12 Bookworm, Python 3.11 natif
+- Hostname : `yetthefaces.local`, user : `jamil`, SSH activé, WiFi via Raspberry Pi Imager
 - Connexion : `ssh jamil@yetthefaces.local`
 
 ### Installation logicielle réussie (sur Bookworm)
@@ -59,31 +56,114 @@ python3 -m venv venv --system-site-packages
 source venv/bin/activate
 pip install mediapipe --break-system-packages
 ```
-**Ne pas utiliser** `mediapipe-rpi4` ou `mediapipe-rpi5` (packages piwheels cassés/obsolètes, échouent avec la même erreur `_framework_bindings`). Le simple `pip install mediapipe` fonctionne et résout automatiquement la bonne wheel ARM64.
+**Ne pas utiliser** `mediapipe-rpi4` ou `mediapipe-rpi5` (packages piwheels cassés). Le simple `pip install mediapipe` résout la bonne wheel ARM64.
 
-### Résultat validé
+Stack validée : OpenCV 4.11.0, MediaPipe 0.10.18. Modèle `face_landmarker.task` dans `~/yet-the-faces-mask/`.
+
+---
+
+## Phase B — Session du 17 juillet 2026 (dispositif double écran)
+
+### Config matérielle
+- **Pi 5 sous Bookworm, passé de Wayland à X11** (via `raspi-config`) — décision clé : `cv2.moveWindow` ne fonctionne que sous X11
+- 2 écrans Waveshare 4" 480×800 : **HDMI-1 = portrait bouche** (x=0), **HDMI-2 = paysage œil**, rotation `right` (x=480)
+- Caméra montée physiquement à 90° → redressée dans le script (`cv2.ROTATE_90_COUNTERCLOCKWISE`)
+
+### Scripts (`~/yet-the-faces-mask/`, GitHub à jour)
+- **`mask_pi_v4.py` = version fonctionnelle complète** :
+  - Cadrage dynamique par landmarks (œil droit `[362, 263, 386, 374]`, demi-bouche)
+  - Superposition images `oeil_milena.png` + `bouche_milena.png` (`addWeighted` 75/25, désaturation 0.4, flou gaussien 7)
+  - Autofocus continu + `Sharpness 2.0`
+  - Milena seule affichée quand aucun visage détecté
+- Lancement :
+  ```bash
+  source ~/yet-the-faces-mask/venv/bin/activate
+  DISPLAY=:0 python3 ~/yet-the-faces-mask/mask_pi_v4.py
+  ```
+
+### Problème rencontré (résolu le 18/07)
+- Config xrandr non persistante au reboot ; xrandr **gèle systématiquement sur tout modeset à chaud** (lecture OK)
+- Modeline inventée dans xorg.conf.d → écrans brouillés (fichier supprimé, à ne jamais refaire)
+- Après reboot, perte d'EDID : mode natif `480×800 62.29` absent de xrandr (`0mm×0mm`)
+
+---
+
+## Phase B — Session du 18 juillet 2026 : CONFIG ÉCRANS RÉSOLUE ✔
+
+### Diagnostic final
+1. **Le shutdown complet + débranchage total** (Pi ET USB écrans) a restauré l'EDID — confirmé au boot : `480x800 62.29 +` sur les deux sorties, dimensions physiques réelles (150mm×100mm)
+2. **Cause racine identifiée** : les écrans Waveshare (alimentés par l'USB du Pi) ne fournissent pas leur EDID assez tôt dans la séquence de boot → X démarre en fallback 1024×768 miroir (« deux bureaux »). Un fichier xorg.conf avec `PreferredMode` seul ne suffit donc pas (rotation/position appliquées, mode ignoré)
+3. **Confirmé** : tout modeset xrandr à chaud gèle X (reproductible, driver vc4). Règle : **ne plus jamais changer de mode à chaud** — tout se joue au boot
+
+### Solution définitive (deux fichiers)
+**a) EDID capturé sur disque** — le vrai EDID de l'écran, lu une fois et sauvegardé :
+```bash
+sudo mkdir -p /lib/firmware/edid
+cat /sys/class/drm/card*-HDMI-A-1/edid | sudo tee /lib/firmware/edid/waveshare-480x800.bin > /dev/null
+# vérification : wc -c → 128 octets (bloc EDID valide)
 ```
-OpenCV : 4.11.0
-MediaPipe : 0.10.18
-Environnement OK
+Paramètre kernel ajouté en fin de ligne dans `/boot/firmware/cmdline.txt` :
 ```
-Modèle `face_landmarker.task` déjà téléchargé dans `~/yet-the-faces-mask/` sur le Pi.
+drm.edid_firmware=HDMI-A-1:edid/waveshare-480x800.bin,HDMI-A-2:edid/waveshare-480x800.bin
+```
+
+**b) `/etc/X11/xorg.conf.d/10-ytf-ecrans.conf`** — AUCUNE Modeline :
+```
+Section "Monitor"
+    Identifier "HDMI-1"
+    Option "PreferredMode" "480x800"
+    Option "Rotate" "normal"
+    Option "Position" "0 0"
+    Option "Primary" "true"
+EndSection
+
+Section "Monitor"
+    Identifier "HDMI-2"
+    Option "PreferredMode" "480x800"
+    Option "Rotate" "right"
+    Option "Position" "480 0"
+EndSection
+```
+
+### Résultat validé après cold boot
+```
+Monitors: 2
+ 0: +*HDMI-1 480/150x800/100+0+0   HDMI-1
+ 1: +HDMI-2 800/150x480/100+480+0  HDMI-2
+```
+Bureau étendu 1280×800, définitions natives, rotation et position correctes, **au boot, sans aucune commande xrandr**.
+
+### Validation visuelle : `test_ecrans.py` (v2, dans le repo)
+Script de calibration : aplat rouge « BOUCHE / HDMI-1 / 480x800 » et vert « OEIL / HDMI-2 / 800x480 », flèche HAUT, lecture de la géométrie via `xrandr --listmonitors` (rien en dur). Les deux écrans affichent simultanément, à l'endroit, en définition native. ✔
+
+**Leçon fenêtres OpenCV** : deux fullscreen ouverts coup sur coup s'empilent sur le même écran. Séquence robuste : `namedWindow` → `imshow` → `waitKey(200)` → `moveWindow` → `resizeWindow` → `waitKey(200)` → fullscreen → `waitKey(200)` → **re-`moveWindow`**. À reporter dans `mask_pi_v4.py` si le problème s'y présente.
+
+### Divers
+- Reboot après gel de X : le warm reboot peut accrocher (LED verte fixe, hors réseau) → coupure franche de l'alim, sans danger, et bénéfique pour l'EDID
+- Alimentation écrans : décision = **rester sur l'USB du Pi** pour la portabilité (ou tout sur la batterie Anker, à traiter plus tard). Attention Pi 5 : sur alim non-5A, limite USB à 600mA → si overcurrent sur batterie, ajouter `usb_max_current_enable=1` dans `/boot/firmware/config.txt` ou brancher les écrans directement sur les ports de l'Anker
+- Barre de tâches encore visible en haut de l'écran bouche pendant le test — à masquer à l'étape autostart/kiosque
+
+### `mask_pi_v5.py` — fondu enchaîné (18/07, validé)
+- v4 + fade in/out entre « Milena seule » et la capture live :
+  - `FADE_IN_DUREE = 0.8` s (apparition du visage), `FADE_OUT_DUREE = 1.2` s (effacement)
+  - Fondu basé sur l'horloge réelle (`time.monotonic`), indépendant du framerate
+  - Courbe smoothstep (`t*t*(3-2t)`) pour un départ/arrivée en douceur
+  - Dernière image live mémorisée → le fade out part du visage capté et se dissout vers Milena
+  - Effet secondaire bienvenu : les micro-pertes de détection ondulent au lieu de faire clignoter
+- `mask_pi_v4.py` conservé comme version de référence sans fondu
+
+### Reste à faire (dans l'ordre)
+1. ~~Config écrans pérenne au boot~~ ✔ **FAIT (18/07)**
+2. Systemd autostart de `mask_pi_v5.py` (+ masquer la barre de tâches / mode kiosque)
+3. Config batterie complète (Pi + écrans sur l'Anker, cf. note usb_max_current)
+4. Streaming réseau pour le module de Jorge/Anna (reco faciale — **hors périmètre**)
+5. Boucle vidéo œil/bouche de Milena à la place des images fixes
 
 ---
 
 ## Phase C — Intégration physique (pas commencée)
 
 Câbles FPC dorés pour les écrans (esthétique cuivre/cohérence visuelle avec le masque) — commande AliExpress envisagée mais pas faite, les câbles HDMI noirs Thsucords servent de remplacement temporaire pour les tests.
-
----
-
-## Prochaines étapes immédiates
-
-1. Recevoir et brancher le câble CSI FPC
-2. Tester la Camera Module 3 sur le Pi (remplacer la webcam Mac par `picamera2` dans le pipeline)
-3. Migrer/adapter les scripts Phase A (`mask_hologramme3.py` notamment) pour tourner sur le Pi avec la caméra native
-4. Trancher sur les écrans (Kubii vs autre solution) en fonction du délai contraint par le tournage fin juillet
-5. Reprendre la commande Phase C (câbles dorés, aimants déjà en cours)
 
 ---
 
