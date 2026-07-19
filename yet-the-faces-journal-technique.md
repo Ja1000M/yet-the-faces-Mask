@@ -208,7 +208,15 @@ seuils et force de l'effet à reprendre à la prochaine session, en conditions r
 3. Alimentation : écrans allumés avant/indépendamment du Pi (batterie Anker,
    `usb_max_current_enable=1`) — règle aussi le problème d'allumage au boot
 4. Systemd autostart de `mask_pi_v7.py` (+ masquer lxpanel / mode kiosque)
-5. Streaming réseau pour le module de Jorge/Anna (reco faciale — **hors périmètre**)
+5. Streaming pour le module de Jorge/Anna (reco faciale — **hors périmètre**).
+   **Piste privilégiée (19/07) : liaison Ethernet filaire directe entre les deux
+   Pi 5** (câble RJ45 seul, IP fixes) — le Gigabit permet le flux 720p quasi sans
+   compression (~400 Mbit/s brut) avec latence minimale, là où le WiFi imposerait
+   compression et aléas. Notes qualité : la capture reste en 1280×720 pleine
+   résolution (la réduction DETECTION_ECHELLE ne concerne que la copie analysée
+   par MediaPipe en interne) ; le stream partirait de `frame_rgb` intact ; la
+   Camera Module 3 peut monter au-delà de 720p si leur reco l'exige. Contrainte
+   à discuter avec l'équipe : le câble physique masque → second Pi (scénographie).
 6. Boucle vidéo œil/bouche de Milena à la place des images fixes
 
 ---
