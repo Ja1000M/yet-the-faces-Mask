@@ -1,5 +1,5 @@
 # Yet The Faces — Journal technique complet
-**État au 18 juillet 2026**
+**État au 19 juillet 2026**
 
 ## Contexte du projet
 
@@ -152,12 +152,64 @@ Script de calibration : aplat rouge « BOUCHE / HDMI-1 / 480x800 » et vert « O
   - Effet secondaire bienvenu : les micro-pertes de détection ondulent au lieu de faire clignoter
 - `mask_pi_v4.py` conservé comme version de référence sans fondu
 
+---
+
+## Phase B — Session du 19 juillet 2026 : rendu de l'image (v6 → v7)
+
+### Problème d'allumage constaté (à résoudre avec l'alim)
+Au boot, les écrans restent noirs (clignotement vague) : alimentés par l'USB du Pi,
+ils s'allument trop tard et ratent l'accrochage du signal HDMI (que notre config
+EDID émet pourtant très tôt). **Un débranchement/rebranchement des USB écrans suffit**
+à accrocher l'image — inacceptable une fois le dispositif monté sur le masque.
+À traiter avec le chantier alimentation (piste : USB écrans sur la batterie Anker,
+allumés avant le Pi ; et/ou `usb_max_current_enable=1`).
+
+Autre point : la barre de tâches (lxpanel) reste devant la fenêtre BOUCHE.
+Contournement immédiat : `pkill lxpanel` (retour : `DISPLAY=:0 lxpanel -p LXDE-pi &`).
+Solution définitive au chantier autostart/kiosque.
+
+### `mask_pi_v6.py` — travail du rendu (validé par étapes successives)
+Le rendu « froid/clinique » hérité de la Phase A (désaturation 0.6 + décalage bleu)
+était jugé triste et grisâtre. Paramètres exposés et ajustés à l'œil sur les écrans :
+- `FLUX_SATURATION 1.05`, `FLUX_LUMINOSITE 1.05`, `FLUX_CONTRASTE 1.18`
+- `FLUX_TEMPERATURE 5` avec **protection des blancs** (`TEMPERATURE_SEUIL_BLANC 200`,
+  courbe progressive) — corrige le blanc de l'œil qui jaunissait
+- Séquence fenêtres robuste appliquée (la fenêtre BOUCHE s'empilait derrière OEIL)
+- **Mode de mélange « screen »** (superposition lumineuse, double exposition) à la
+  place de la moyenne addWeighted : les deux regards (capté + Milena) coexistent
+  sans se noyer dans le gris — nettement plus percutant
+
+### Dramaturgie de la proximité (introduite, à affiner)
+La distance est estimée par la largeur de l'œil capté en pixels. Trois actes :
+1. **Loin** : flux flouté (45) + Milena pleine présence (1.0)
+2. **Approche** : révélation progressive — le visage capté devient net, Milena
+   s'efface (courbe `REVELATION_COURBE 2.0` : dévoilement concentré sur la fin)
+3. **Zone d'intimité** (`oeil ≥ 240px`) : Milena réémerge (0.9) et « défend sa
+   zone » — trouvaille née d'un comportement accidentel, conservée volontairement
+Paramètres de calibration : `OEIL_PX_LOIN 50 / PROCHE 180 / INTIME 240-320`,
+lissage temporel 0.12. Debug console 1×/s : largeur œil px, proximité, intimité,
+présence Milena, fps.
+**État : l'effet fonctionne mais n'est pas encore concluant — calibration des
+seuils et force de l'effet à reprendre à la prochaine session, en conditions réelles.**
+
+### `mask_pi_v7.py` — optimisation : 7 → 18 fps
+- Détection MediaPipe sur image réduite de moitié (`DETECTION_ECHELLE 0.5`) —
+  les landmarks étant normalisés, la précision reste suffisante ; les crops
+  restent en pleine résolution
+- Flou appliqué au petit crop **avant** agrandissement (noyau mis à l'échelle)
+- Calculs couleur en opérations OpenCV natives uint8/SIMD (LUT température
+  précalculée, `convertScaleAbs`, screen en `multiply`/`bitwise_not`) —
+  plus de flottants numpy par image
+- Mesuré : **18 fps** (contre 7 avec v6) — fluide pour le dispositif
+
 ### Reste à faire (dans l'ordre)
 1. ~~Config écrans pérenne au boot~~ ✔ **FAIT (18/07)**
-2. Systemd autostart de `mask_pi_v5.py` (+ masquer la barre de tâches / mode kiosque)
-3. Config batterie complète (Pi + écrans sur l'Anker, cf. note usb_max_current)
-4. Streaming réseau pour le module de Jorge/Anna (reco faciale — **hors périmètre**)
-5. Boucle vidéo œil/bouche de Milena à la place des images fixes
+2. **Affiner l'effet proximité/révélation** (calibration px réels, force de l'effet)
+3. Alimentation : écrans allumés avant/indépendamment du Pi (batterie Anker,
+   `usb_max_current_enable=1`) — règle aussi le problème d'allumage au boot
+4. Systemd autostart de `mask_pi_v7.py` (+ masquer lxpanel / mode kiosque)
+5. Streaming réseau pour le module de Jorge/Anna (reco faciale — **hors périmètre**)
+6. Boucle vidéo œil/bouche de Milena à la place des images fixes
 
 ---
 
