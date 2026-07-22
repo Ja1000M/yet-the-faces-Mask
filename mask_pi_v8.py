@@ -36,11 +36,11 @@ BOUCHE_POSITION_HAUT = 250
 OEIL_LARGEUR_ECRAN = 500
 
 # === RENDU DU FLUX LIVE ===
-FLUX_SATURATION = 1.0
-FLUX_TEMPERATURE = 0
-TEMPERATURE_SEUIL_BLANC = 200  # luminosite au-dela de laquelle un pixel n'est plus teinte
-FLUX_LUMINOSITE = 1.05    # 1 = inchangee, 1.1 = +10%, 0.9 = -10%
-FLUX_CONTRASTE = 1.18     # 1 = inchange, 1.2 = +20%, 0.9 = plus doux
+FLUX_SATURATION = 1.05    # 0 = noir et blanc, 1 = couleurs d'origine, >1 = renforcees
+FLUX_TEMPERATURE = 12     # >0 = plus chaud (rouge), <0 = plus froid (bleu), 0 = neutre
+TEMPERATURE_SEUIL_BLANC = 235  # luminosite au-dela de laquelle un pixel n'est plus teinte
+FLUX_LUMINOSITE = 1.15    # 1 = inchangee, 1.1 = +10%, 0.9 = -10%
+FLUX_CONTRASTE = 1.10     # 1 = inchange, 1.2 = +20%, 0.9 = plus doux
 
 # --- Nettete progressive : l'image se precise a l'approche ---
 # Contre le "flou non assume" (mollesse d'agrandissement) : un masque de
@@ -55,18 +55,18 @@ NETTETE_MAX = 0.7   # accentuation max au point optimum (0 = aucune ; 0.4 doux, 
 MODE_MELANGE = "screen"
 
 # --- Proximite : la personne captee se revele en s'approchant ---
-OEIL_PX_LOIN = 30        # largeur d'oeil (px) consideree "loin"
-OEIL_PX_PROCHE = 37     # largeur d'oeil (px) consideree "tout proche"
-FLOU_LOIN = 80           # flou du flux quand loin (impair ; 0 = pas de flou) - defocus assume
+OEIL_PX_LOIN = 33        # largeur d'oeil (px) consideree "loin" (mesure reelle NoIR grand angle)
+OEIL_PX_PROCHE = 68      # largeur d'oeil (px) consideree "tout proche" (mesure reelle)
+FLOU_LOIN = 55           # flou du flux quand loin (impair ; 0 = pas de flou) - defocus assume
 PRESENCE_MILENA_LOIN = 1.0     # presence de Milena quand la personne est loin
-PRESENCE_MILENA_PROCHE = 0.0
+PRESENCE_MILENA_PROCHE = 0.2   # au point optimum : on sent encore l'oeil de Milena, en plus doux
 PROXIMITE_LISSAGE = 0.12  # 0.05 = tres amorti, 0.3 = tres reactif
 REVELATION_COURBE = 2.0   # 1 = revelation lineaire ; 2, 3 = revelation tardive
                           # et d'autant plus spectaculaire au dernier moment
 
 # --- Zone d'intimite : trop pres, Milena reemerge et defend sa zone ---
-OEIL_PX_INTIME = 43       # largeur d'oeil (px) ou commence la zone d'intimite
-OEIL_PX_INTIME_MAX = 50   # largeur d'oeil (px) ou Milena est pleinement revenue
+OEIL_PX_INTIME = 85        # largeur d'oeil (px) ou commence la zone d'intimite (mesure reelle)
+OEIL_PX_INTIME_MAX = 105   # largeur d'oeil (px) ou Milena est pleinement revenue (mesure reelle)
 PRESENCE_MILENA_INTIME = 0.9   # presence de Milena au coeur de la zone d'intimite
 
 # === IMAGES MILENA ===
@@ -184,7 +184,7 @@ def traiter_crop(crop_rgb, dest_w, dest_h):
     if crop_rgb.size == 0:
         return np.zeros((dest_h, dest_w, 3), dtype=np.uint8)
     resized = cv2.resize(crop_rgb, (dest_w, dest_h), interpolation=cv2.INTER_CUBIC)
-    bgr = resized
+    bgr = cv2.cvtColor(resized, cv2.COLOR_RGB2BGR)
 
     # saturation + luminosite (canaux HSV en uint8)
     if FLUX_SATURATION != 1.0 or FLUX_LUMINOSITE != 1.0:

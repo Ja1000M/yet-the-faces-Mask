@@ -202,9 +202,35 @@ seuils et force de l'effet à reprendre à la prochaine session, en conditions r
   plus de flottants numpy par image
 - Mesuré : **18 fps** (contre 7 avec v6) — fluide pour le dispositif
 
+---
+
+## Phase B — Session du 22 juillet 2026 : effet proximité VALIDÉ (v8)
+
+### `mask_pi_v8.py` = version de référence
+Apports depuis v7 : masque de netteté progressif (unsharp, `NETTETE_MAX`),
+agrandissement `INTER_CUBIC`, cadrage bouche affiné (`BOUCHE_LARGEUR_ECRAN 270`,
+`BOUCHE_POSITION_HAUT 250`).
+
+### Calibration de la dramaturgie (mesures réelles console)
+Découverte clé : avec la caméra **NoIR grand angle (imx708_wide_noir)**, la largeur
+d'œil captée plafonne à ~90-105 px (jamais 180 comme supposé). Les seuils d'origine
+rendaient l'effet inopérant (proximité bloquée < 0.15, Milena jamais effacée).
+**Seuils recalés sur la plage réelle** : `OEIL_PX_LOIN 33`, `OEIL_PX_PROCHE 68`,
+zone d'intimité `OEIL_PX_INTIME 85 → INTIME_MAX 105`.
+Arc validé en conditions réelles : loin (~33px) presence 1.00 → approche → révélation
+pleine (~72px, presence 0.20) → très près (~105px) Milena réémerge (intimité 0.43,
+presence 0.48, « défend sa zone »). fps stables 15-16.
+
+### Rendu couleur ajusté (retour Milena)
+Le live était jugé trop sombre/contrasté/bleu vs la teinte chaude des images de
+Milena. Réglages : `FLUX_LUMINOSITE 1.15`, `FLUX_CONTRASTE 1.10`,
+`FLUX_TEMPERATURE 12` + protection des blancs relevée (`TEMPERATURE_SEUIL_BLANC 235`).
+Piste si encore trop froid : forcer la balance des blancs caméra (`AwbMode`
+tungsten/indoor) plutôt que corriger après coup — la NoIR tire vers le bleu-violet.
+
 ### Reste à faire (dans l'ordre)
 1. ~~Config écrans pérenne au boot~~ ✔ **FAIT (18/07)**
-2. **Affiner l'effet proximité/révélation** (calibration px réels, force de l'effet)
+2. ~~Affiner l'effet proximité/révélation~~ ✔ **FAIT (22/07, v8 calibrée)**
 3. Alimentation : écrans allumés avant/indépendamment du Pi (batterie Anker,
    `usb_max_current_enable=1`) — règle aussi le problème d'allumage au boot
 4. Systemd autostart de `mask_pi_v7.py` (+ masquer lxpanel / mode kiosque)
