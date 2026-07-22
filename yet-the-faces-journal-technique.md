@@ -218,13 +218,31 @@ rendaient l'effet inopérant (proximité bloquée < 0.15, Milena jamais effacée
 **Seuils recalés sur la plage réelle** : `OEIL_PX_LOIN 33`, `OEIL_PX_PROCHE 68`,
 zone d'intimité `OEIL_PX_INTIME 85 → INTIME_MAX 105`.
 Arc validé en conditions réelles : loin (~33px) presence 1.00 → approche → révélation
-pleine (~72px, presence 0.20) → très près (~105px) Milena réémerge (intimité 0.43,
-presence 0.48, « défend sa zone »). fps stables 15-16.
+pleine → très près (~105px) Milena réémerge (« défend sa zone »). fps stables 15-16.
 
-### Rendu couleur ajusté (retour Milena)
+**VALEURS DE CALIBRATION VALIDÉES (22/07) — à conserver, ne changer qu'avec mesure console :**
+
+| Paramètre | Valeur | Rôle |
+|---|---|---|
+| `OEIL_PX_LOIN` | 33 | œil (px) = « loin », Milena pleine |
+| `OEIL_PX_PROCHE` | 55 | œil (px) = révélation pleine (net + seul). ↓ = net plus tôt/loin, ↑ = plus tard/près |
+| `OEIL_PX_INTIME` | 85 | œil (px) = début zone d'intimité (Milena revient) |
+| `OEIL_PX_INTIME_MAX` | 105 | œil (px) = Milena pleinement revenue (≈ max atteignable) |
+| `PRESENCE_MILENA_LOIN` | 1.0 | présence Milena au loin |
+| `PRESENCE_MILENA_PROCHE` | 0.2 | présence Milena au point de révélation (0.2 = on la sent encore un peu) |
+| `PRESENCE_MILENA_INTIME` | 0.9 | présence Milena au cœur de l'intimité |
+| `REVELATION_COURBE` | 2.0 | 1 = linéaire, 2-3 = révélation tardive/spectaculaire |
+| `PROXIMITE_LISSAGE` | 0.12 | amortissement temporel (0.05 lent, 0.3 réactif) |
+| `FLOU_LOIN` | 55 | flou assumé quand loin |
+| `NETTETE_MAX` | 0.7 | accentuation (unsharp) au point net |
+
+Repères px ↔ distance (caméra NoIR grand angle) : ~33px = loin / ~55px = point de
+révélation validé / ~105px = collé au masque (max).
+
+### Rendu couleur ajusté (retour Milena) — VALEURS VALIDÉES 22/07
 Le live était jugé trop sombre/contrasté/bleu vs la teinte chaude des images de
-Milena. Réglages : `FLUX_LUMINOSITE 1.15`, `FLUX_CONTRASTE 1.10`,
-`FLUX_TEMPERATURE 12` + protection des blancs relevée (`TEMPERATURE_SEUIL_BLANC 235`).
+Milena. Réglages validés : `FLUX_SATURATION 1.05`, `FLUX_LUMINOSITE 1.15`,
+`FLUX_CONTRASTE 1.10`, `FLUX_TEMPERATURE 12`, `TEMPERATURE_SEUIL_BLANC 235`.
 Piste si encore trop froid : forcer la balance des blancs caméra (`AwbMode`
 tungsten/indoor) plutôt que corriger après coup — la NoIR tire vers le bleu-violet.
 

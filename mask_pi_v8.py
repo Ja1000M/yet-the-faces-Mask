@@ -56,7 +56,7 @@ MODE_MELANGE = "screen"
 
 # --- Proximite : la personne captee se revele en s'approchant ---
 OEIL_PX_LOIN = 33        # largeur d'oeil (px) consideree "loin" (mesure reelle NoIR grand angle)
-OEIL_PX_PROCHE = 68      # largeur d'oeil (px) consideree "tout proche" (mesure reelle)
+OEIL_PX_PROCHE = 55      # largeur d'oeil (px) : revelation pleine atteinte plus tot (plus loin)
 FLOU_LOIN = 55           # flou du flux quand loin (impair ; 0 = pas de flou) - defocus assume
 PRESENCE_MILENA_LOIN = 1.0     # presence de Milena quand la personne est loin
 PRESENCE_MILENA_PROCHE = 0.2   # au point optimum : on sent encore l'oeil de Milena, en plus doux
