@@ -168,6 +168,16 @@ Autre point : la barre de tâches (lxpanel) reste devant la fenêtre BOUCHE.
 Contournement immédiat : `pkill lxpanel` (retour : `DISPLAY=:0 lxpanel -p LXDE-pi &`).
 Solution définitive au chantier autostart/kiosque.
 
+**PROCÉDURE D'ALLUMAGE VALIDÉE (22/07)** : le vrai problème n'est pas le courant
+mais le raccrochage du signal HDMI — un écran allumé pendant le boot (avant que le
+Pi ne sorte l'image) se fige dans un état bâtard. Solution simple et fiable, sur
+secteur comme sur batterie : **booter le Pi écrans ÉTEINTS, puis allumer les écrans
+une fois le boot terminé** (~1 min). Ils s'allument alors sur un signal HDMI déjà
+présent et raccrochent du premier coup. (Le off/on d'écrans déjà allumés marche
+aussi, mais l'allumage-après-boot est plus simple : un seul geste.)
+Reste à automatiser pour le masque porté (alim des écrans retardée après le boot,
+ou re-scan HDMI au lancement du script) — chantier autonomie/systemd.
+
 ### `mask_pi_v6.py` — travail du rendu (validé par étapes successives)
 Le rendu « froid/clinique » hérité de la Phase A (désaturation 0.6 + décalage bleu)
 était jugé triste et grisâtre. Paramètres exposés et ajustés à l'œil sur les écrans :

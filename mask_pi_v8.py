@@ -35,9 +35,16 @@ BOUCHE_LARGEUR_ECRAN = 270
 BOUCHE_POSITION_HAUT = 250
 OEIL_LARGEUR_ECRAN = 500
 
+# === STABILISATION DU CADRE (anti-tressautement) ===
+# Lisse dans le temps la position et le zoom du crop pour absorber le bruit
+# des landmarks (le cadre suit le visage en douceur au lieu de vibrer).
+# 1.0 = aucun lissage (brut, tressaute) ; 0.15 = tres stable mais un peu mou ;
+# 0.3 = bon compromis reactivite/stabilite.
+STAB_LISSAGE = 0.3
+
 # === RENDU DU FLUX LIVE ===
 FLUX_SATURATION = 1.05    # 0 = noir et blanc, 1 = couleurs d'origine, >1 = renforcees
-FLUX_TEMPERATURE = 12     # >0 = plus chaud (rouge), <0 = plus froid (bleu), 0 = neutre
+FLUX_TEMPERATURE = 7      # >0 = plus chaud (rouge), <0 = plus froid (bleu), 0 = neutre
 TEMPERATURE_SEUIL_BLANC = 235  # luminosite au-dela de laquelle un pixel n'est plus teinte
 FLUX_LUMINOSITE = 1.15    # 1 = inchangee, 1.1 = +10%, 0.9 = -10%
 FLUX_CONTRASTE = 1.10     # 1 = inchange, 1.2 = +20%, 0.9 = plus doux
@@ -54,6 +61,13 @@ NETTETE_MAX = 0.7   # accentuation max au point optimum (0 = aucune ; 0.4 doux, 
 # "aucun"  : flux live pur
 MODE_MELANGE = "screen"
 
+# --- Recolorisation vers Milena (mode fusion "Couleur") ---
+# Garde la LUMINANCE du flux live (details, mouvement) mais emprunte la
+# TEINTE + SATURATION de l'image de Milena. Corrige le rendu violet de la
+# camera NoIR en unifiant vers les tons chauds de Milena.
+# 0 = couleur d'origine (violet NoIR) ; 1 = couleur de Milena pleine.
+RECOLOR_MILENA = 0.5
+
 # --- Proximite : la personne captee se revele en s'approchant ---
 OEIL_PX_LOIN = 33        # largeur d'oeil (px) consideree "loin" (mesure reelle NoIR grand angle)
 OEIL_PX_PROCHE = 55      # largeur d'oeil (px) : revelation pleine atteinte plus tot (plus loin)
@@ -61,12 +75,11 @@ FLOU_LOIN = 55           # flou du flux quand loin (impair ; 0 = pas de flou) - 
 PRESENCE_MILENA_LOIN = 1.0     # presence de Milena quand la personne est loin
 PRESENCE_MILENA_PROCHE = 0.2   # au point optimum : on sent encore l'oeil de Milena, en plus doux
 PROXIMITE_LISSAGE = 0.12  # 0.05 = tres amorti, 0.3 = tres reactif
-REVELATION_COURBE = 2.0   # 1 = revelation lineaire ; 2, 3 = revelation tardive
-                          # et d'autant plus spectaculaire au dernier moment
+REVELATION_COURBE = 0.8   # <1 = revelation precoce (net tot) ; 1 = lineaire ; 2,3 = tardive/spectaculaire
 
 # --- Zone d'intimite : trop pres, Milena reemerge et defend sa zone ---
-OEIL_PX_INTIME = 85        # largeur d'oeil (px) ou commence la zone d'intimite (mesure reelle)
-OEIL_PX_INTIME_MAX = 105   # largeur d'oeil (px) ou Milena est pleinement revenue (mesure reelle)
+OEIL_PX_INTIME = 72        # largeur d'oeil (px) ou commence la zone d'intimite (Milena revient plus tot)
+OEIL_PX_INTIME_MAX = 92    # largeur d'oeil (px) ou Milena est pleinement revenue
 PRESENCE_MILENA_INTIME = 0.9   # presence de Milena au coeur de la zone d'intimite
 
 # === IMAGES MILENA ===
@@ -216,6 +229,18 @@ def traiter_crop(crop_rgb, dest_w, dest_h):
             beta=128.0 * (1.0 - FLUX_CONTRASTE))
     return bgr
 
+def recolorer(live, milena, intensite):
+    """Mode fusion 'Couleur' : luminance du live + teinte/saturation de Milena.
+    Neutralise le violet de la NoIR en unifiant vers les tons de Milena."""
+    if milena is None or intensite <= 0.0:
+        return live
+    live_hsv = cv2.cvtColor(live, cv2.COLOR_BGR2HSV)
+    mil_hsv = cv2.cvtColor(milena, cv2.COLOR_BGR2HSV)
+    _, _, lv = cv2.split(live_hsv)      # luminance (V) du live
+    mh, ms, _ = cv2.split(mil_hsv)      # teinte (H) + saturation (S) de Milena
+    recolored = cv2.cvtColor(cv2.merge([mh, ms, lv]), cv2.COLOR_HSV2BGR)
+    return cv2.addWeighted(live, 1.0 - intensite, recolored, intensite, 0)
+
 def accentuer(img, amount):
     """Masque de nettete (unsharp mask). amount 0 = image inchangee.
     Reintroduit une nettete franche a l'approche pour defaire la mollesse
@@ -253,6 +278,16 @@ t_precedent = time.monotonic()
 proximite = 0.0          # 0 = loin, 1 = tout proche (valeur lissee)
 intimite = 0.0           # 0 = hors zone d'intimite, 1 = en plein dedans (lissee)
 t_dernier_debug = 0.0
+
+# stabilisation du cadre (valeurs lissees, None = non initialise)
+oeil_cx_s = oeil_cy_s = oeil_zw_s = None
+bou_cx_s = bou_cy_s = bou_zw_s = None
+
+def lisser_cadre(actuel, cible, a):
+    """Filtre passe-bas 1er ordre. actuel None -> initialise a cible."""
+    if actuel is None:
+        return float(cible)
+    return actuel + (cible - actuel) * a
 
 with FaceLandmarker.create_from_options(options) as landmarker:
     while True:
@@ -309,34 +344,46 @@ with FaceLandmarker.create_from_options(options) as landmarker:
                       f"presence Milena {presence_milena:4.2f}  {fps:4.1f} fps")
 
             # ================= OEIL =================
-            zone_w = int(oeil_l * OEIL_ECRAN_W / OEIL_LARGEUR_ECRAN)
-            zone_h = int(zone_w * OEIL_ECRAN_H / OEIL_ECRAN_W)
+            zone_w = oeil_l * OEIL_ECRAN_W / OEIL_LARGEUR_ECRAN
             xs = [lm[i].x * w for i in ORBITE]
             ys = [lm[i].y * h for i in ORBITE]
-            cx = int(np.mean(xs))
-            cy = int(np.mean(ys)) - DECALAGE_SOURCIL
-            x1 = cx - zone_w // 2
-            y1 = cy - zone_h // 2
+            cx = np.mean(xs)
+            cy = np.mean(ys) - DECALAGE_SOURCIL
+            # stabilisation : lisse centre + zoom du cadre
+            oeil_cx_s = lisser_cadre(oeil_cx_s, cx, STAB_LISSAGE)
+            oeil_cy_s = lisser_cadre(oeil_cy_s, cy, STAB_LISSAGE)
+            oeil_zw_s = lisser_cadre(oeil_zw_s, zone_w, STAB_LISSAGE)
+            zone_w = int(oeil_zw_s)
+            zone_h = int(zone_w * OEIL_ECRAN_H / OEIL_ECRAN_W)
+            x1 = int(oeil_cx_s) - zone_w // 2
+            y1 = int(oeil_cy_s) - zone_h // 2
             crop_oeil = crop_sur(frame_rgb, x1, y1, x1 + zone_w, y1 + zone_h)
             crop_oeil = flouter_crop(crop_oeil, p_eff, OEIL_ECRAN_W)
             live_oeil = traiter_crop(crop_oeil, OEIL_ECRAN_W, OEIL_ECRAN_H)
+            live_oeil = recolorer(live_oeil, oeil_milena, RECOLOR_MILENA)
             live_oeil = accentuer(live_oeil, nettete)
             live_oeil = melanger(live_oeil, oeil_milena, presence_milena)
 
             # ================= BOUCHE =================
             centre_x = (lm[BOUCHE_COIN_G].x + lm[BOUCHE_COIN_D].x) / 2 * w
             demi_l = abs(lm[BOUCHE_COIN_G].x * w - centre_x)
-            zone_w = int(demi_l * BOUCHE_ECRAN_W / BOUCHE_LARGEUR_ECRAN)
-            zone_h = int(zone_w * BOUCHE_ECRAN_H / BOUCHE_ECRAN_W)
+            zone_w = demi_l * BOUCHE_ECRAN_W / BOUCHE_LARGEUR_ECRAN
             bys = [lm[i].y * h for i in BOUCHE_LM]
-            bcy = int(np.mean(bys))
-            bcx = int(centre_x)
-            bx1 = bcx - zone_w
+            bcy = np.mean(bys)
+            bcx = centre_x
+            # stabilisation : lisse centre + zoom du cadre
+            bou_cx_s = lisser_cadre(bou_cx_s, bcx, STAB_LISSAGE)
+            bou_cy_s = lisser_cadre(bou_cy_s, bcy, STAB_LISSAGE)
+            bou_zw_s = lisser_cadre(bou_zw_s, zone_w, STAB_LISSAGE)
+            zone_w = int(bou_zw_s)
+            zone_h = int(zone_w * BOUCHE_ECRAN_H / BOUCHE_ECRAN_W)
+            bx1 = int(bou_cx_s) - zone_w
             decal_haut = int(zone_h * BOUCHE_POSITION_HAUT / BOUCHE_ECRAN_H)
-            by1 = bcy - decal_haut
+            by1 = int(bou_cy_s) - decal_haut
             crop_bouche = crop_sur(frame_rgb, bx1, by1, bx1 + zone_w, by1 + zone_h)
             crop_bouche = flouter_crop(crop_bouche, p_eff, BOUCHE_ECRAN_W)
             live_bouche = traiter_crop(crop_bouche, BOUCHE_ECRAN_W, BOUCHE_ECRAN_H)
+            live_bouche = recolorer(live_bouche, bouche_milena, RECOLOR_MILENA)
             live_bouche = accentuer(live_bouche, nettete)
             live_bouche = melanger(live_bouche, bouche_milena, presence_milena)
 
